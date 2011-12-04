@@ -17,7 +17,7 @@
 // name of the ASIO device to be used
 #if WINDOWS
 //	#define ASIO_DRIVER_NAME    "ASIO Multimedia Driver"
-	#define ASIO_DRIVER_NAME    "ASIO Sample"
+	#define ASIO_DRIVER_NAME    "ASIO4ALL v2" //"ASIO Sample"
 #elif MAC
 //	#define ASIO_DRIVER_NAME   	"Apple Sound Manager"
 	#define ASIO_DRIVER_NAME   	"ASIO Sample"

@@ -1,4 +1,4 @@
 *.ncb
 *.suo
 *.user
-*/Debug/*
+Debug/

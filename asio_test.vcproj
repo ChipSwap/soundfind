@@ -39,6 +39,7 @@
 			<Tool
 				Name="VCCLCompilerTool"
 				Optimization="0"
+				AdditionalIncludeDirectories="ASIOSDK2/common/;ASIOSDK2/host/;ASIOSDK2/host/pc/"
 				MinimalRebuild="true"
 				BasicRuntimeChecks="3"
 				RuntimeLibrary="3"
@@ -110,6 +111,7 @@
 			/>
 			<Tool
 				Name="VCCLCompilerTool"
+				AdditionalIncludeDirectories="ASIOSDK2/common/;ASIOSDK2/host/;ASIOSDK2/host/pc/"
 				RuntimeLibrary="2"
 				WarningLevel="3"
 				Detect64BitPortabilityProblems="true"
@@ -165,6 +167,26 @@
 			Filter="cpp;c;cc;cxx;def;odl;idl;hpj;bat;asm;asmx"
 			UniqueIdentifier="{4FC737F1-C7A5-4376-A066-2A32D752A2FF}"
 			>
+			<File
+				RelativePath=".\main.cpp"
+				>
+			</File>
+			<Filter
+				Name="asio"
+				>
+				<File
+					RelativePath=".\ASIOSDK2\common\asio.cpp"
+					>
+				</File>
+				<File
+					RelativePath=".\ASIOSDK2\host\asiodrivers.cpp"
+					>
+				</File>
+				<File
+					RelativePath=".\ASIOSDK2\host\pc\asiolist.cpp"
+					>
+				</File>
+			</Filter>
 		</Filter>
 		<Filter
 			Name="Header Files"
