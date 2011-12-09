@@ -83,7 +83,7 @@ long AsioMessage(long selector, long value, void* message, double* opt)
 	return ret;
 }
 
-void BufferSwitch(long index, ASIOBool process_now)
+ASIOTime* BufferSwitchTimeInfo(ASIOTime* time_info, long index, ASIOBool process_now)
 {
   // go through the buffers, only using outputs
   ASIOBufferInfo*  b = buffer_infos  + input_channels;
@@ -109,12 +109,10 @@ void BufferSwitch(long index, ASIOBool process_now)
   int n = 0; 
   }
 
-}
-
-ASIOTime* BufferSwitchTimeInfo(ASIOTime* time_info, long index, ASIOBool process_now)
-{
   return NULL;
 }
+
+void BufferSwitch(long index, ASIOBool process_now) { BufferSwitchTimeInfo(NULL, index, process_now); }
 
 int main(int argc, char* argv[])
 {
@@ -133,13 +131,19 @@ int main(int argc, char* argv[])
 
   if (drivers_found <= 0) exit(EXIT_FAILURE);
 
-  // try to open the 0th one
-  bool success = asio_drivers.loadDriver(names[0]);
-  if (!success) exit(EXIT_FAILURE);
+  // keep going till we find a good one
+  int idx = 0;
+  do
+  {
+    bool success = asio_drivers.loadDriver(names[idx++]);
+    if (!success) exit(EXIT_FAILURE);
 
-  // initialize and get driver info at the same time
-  ASIODriverInfo driver_info;
-  error = ASIOInit(&driver_info);
+    // initialize and get driver info at the same time
+    ASIODriverInfo driver_info;
+    error = ASIOInit(&driver_info);
+  } while (error != ASE_OK);
+
+  // couldn't find anything!
   if (error != ASE_OK) exit(EXIT_FAILURE);
 
   // try the control panel
@@ -256,7 +260,7 @@ int main(int argc, char* argv[])
 
   // exit
   error = ASIOExit();
-  if (!success) exit(EXIT_FAILURE);
+  if (error != ASE_OK) exit(EXIT_FAILURE);
 
   // remove the driver
   asio_drivers.removeCurrentDriver();

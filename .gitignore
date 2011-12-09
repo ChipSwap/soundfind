@@ -1,4 +1,7 @@
+*.sdf
+*.opensdf
 *.ncb
 *.suo
 *.user
 Debug/
+ipch/
