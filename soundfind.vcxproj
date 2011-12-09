@@ -72,10 +72,14 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="asio_helper.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="ASIOSDK2\common\asio.cpp" />
     <ClCompile Include="ASIOSDK2\host\asiodrivers.cpp" />
     <ClCompile Include="ASIOSDK2\host\pc\asiolist.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="asio_helper.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

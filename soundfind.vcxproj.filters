@@ -30,5 +30,13 @@
     <ClCompile Include="ASIOSDK2\host\pc\asiolist.cpp">
       <Filter>Source Files\asio</Filter>
     </ClCompile>
+    <ClCompile Include="asio_helper.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="asio_helper.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>
