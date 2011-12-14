@@ -1,7 +1,9 @@
 #include "asio_helper.h"
 
+// this is static global so we can access it inside the audio callback
 static ASIOHelper asio_;
 
+// put our good stuff here -- write out what we want when ASIO requests it
 void MyAudioCallback(int index)
 {
   // go through the buffers, only using outputs
@@ -27,8 +29,8 @@ void MyAudioCallback(int index)
   }
 }
 
-
 int main(int argc, char* argv[])
 {
+  // gets ASIO going and uses our callback as the audio callback
   asio_.Init(MyAudioCallback);
 }
