@@ -1,9 +1,9 @@
 #include "asio_helper.h"
 
-// external callback
-static AudioCallback callback_;  
+// Our external callback
+AudioCallback ASIOHelper::external_callback_ = NULL;
 
-void SampleRateDidChange(ASIOSampleRate sRate)
+void ASIOHelper::SampleRateDidChange(ASIOSampleRate sRate)
 {
 	// do whatever you need to do if the sample rate changed
 	// usually this only happens during external sync.
@@ -13,7 +13,7 @@ void SampleRateDidChange(ASIOSampleRate sRate)
 	// You might have to update time/sample related conversion routines, etc.
 }
 
-long AsioMessage(long selector, long value, void* message, double* opt)
+long ASIOHelper::AsioMessage(long selector, long value, void* message, double* opt)
 {
 	// currently the parameters "value", "message" and "opt" are not used.
 	long ret = 0;
@@ -75,14 +75,14 @@ long AsioMessage(long selector, long value, void* message, double* opt)
 	return ret;
 }
 
-ASIOTime* BufferSwitchTimeInfo(ASIOTime* time_info, long index, ASIOBool process_now)
+ASIOTime* ASIOHelper::BufferSwitchTimeInfo(ASIOTime* time_info, long index, ASIOBool process_now)
 {
   // pass to the external callback
-  callback_(index);
-  return NULL;
+  external_callback_(index);
+  return time_info;
 }
 
-void BufferSwitch(long index, ASIOBool process_now) 
+void ASIOHelper::BufferSwitch(long index, ASIOBool process_now) 
 { 
   BufferSwitchTimeInfo(NULL, index, process_now); 
 }
@@ -90,7 +90,7 @@ void BufferSwitch(long index, ASIOBool process_now)
 void ASIOHelper::Init(AudioCallback callback)
 {
   // get the callback function
-  callback_ = callback;
+  external_callback_ = callback;
 
   // to hold ASIO-related errors
   ASIOError error;
@@ -100,7 +100,7 @@ void ASIOHelper::Init(AudioCallback callback)
     names[i] = new char[kMaxAsioDriverNameLen];
 
   // get the driver names
-  long drivers_found = asio_drivers.getDriverNames(
+  long drivers_found = asio_drivers_.getDriverNames(
     names, 
     kMaxAsioDriverNameLen
     );
@@ -111,13 +111,17 @@ void ASIOHelper::Init(AudioCallback callback)
   int idx = 0;
   do
   {
-    bool success = asio_drivers.loadDriver(names[idx++]);
+    bool success = asio_drivers_.loadDriver(names[idx++]);
     if (!success) exit(EXIT_FAILURE);
 
     // initialize and get driver info at the same time
     ASIODriverInfo driver_info;
     error = ASIOInit(&driver_info);
   } while (error != ASE_OK);
+
+  // clear the names memory
+  for (int i = 0; i < kMaxAsioDriverLen; ++i)
+    delete[] names[i];
 
   // couldn't find anything!
   if (error != ASE_OK) exit(EXIT_FAILURE);
@@ -138,19 +142,15 @@ void ASIOHelper::Init(AudioCallback callback)
   buffer_size_ = preferred_size;
 
   // get the sample rate
-  ASIOSampleRate sample_rate;
-  error = ASIOGetSampleRate(&sample_rate);
+  error = ASIOGetSampleRate(&sample_rate_);
   if (error != ASE_OK) exit(EXIT_FAILURE);
 
-  // set up the callbacks
-  ASIOCallbacks callbacks;
-  memset(&callbacks, 0, sizeof(ASIOCallbacks));
-  
-  // use our internal callbacks
-  callbacks.bufferSwitch         = BufferSwitch;
-  callbacks.asioMessage          = AsioMessage;
-  callbacks.bufferSwitchTimeInfo = BufferSwitchTimeInfo;
-  callbacks.sampleRateDidChange  = SampleRateDidChange;
+  // set up the callbacks_
+  memset(&callbacks_, 0, sizeof(ASIOCallbacks));
+  callbacks_.bufferSwitch         = BufferSwitch;
+  callbacks_.asioMessage          = AsioMessage;
+  callbacks_.bufferSwitchTimeInfo = BufferSwitchTimeInfo;
+  callbacks_.sampleRateDidChange  = SampleRateDidChange;
   
   // allocate for the buffer infos
   buffer_infos_ = new ASIOBufferInfo[input_channels_ * output_channels_];
@@ -175,7 +175,7 @@ void ASIOHelper::Init(AudioCallback callback)
   }
 
   // create the buffers
-  error = ASIOCreateBuffers(buffer_infos_, input_channels_ + output_channels_, buffer_size_, &callbacks);
+  error = ASIOCreateBuffers(buffer_infos_, input_channels_ + output_channels_, buffer_size_, &callbacks_);
   if (error != ASE_OK) exit(EXIT_FAILURE);
 
   // get the channel info
@@ -203,21 +203,15 @@ void ASIOHelper::Init(AudioCallback callback)
     if (error != ASE_OK) exit(EXIT_FAILURE);
   }
 
-  // get latencies
-  long input_latency, output_latency;
-  error = ASIOGetLatencies(&input_latency, &output_latency);
-  if (error != ASE_OK) exit(EXIT_FAILURE);
-
   // start
   error = ASIOStart();
   if (error != ASE_OK) exit(EXIT_FAILURE);
+}
 
-  for (;;)
-  {
-    // should have a thread event to wake us up...
-    Sleep(100);
-  }
-
+void ASIOHelper::DeInit()
+{
+  ASIOError error;
+  
   // stop
   error = ASIOStop();
   if (error != ASE_OK) exit(EXIT_FAILURE);
@@ -237,8 +231,5 @@ void ASIOHelper::Init(AudioCallback callback)
   if (error != ASE_OK) exit(EXIT_FAILURE);
 
   // remove the driver
-  asio_drivers.removeCurrentDriver();
-
-  for (int i = 0; i < kMaxAsioDriverLen; ++i)
-    delete[] names[i];
+  asio_drivers_.removeCurrentDriver();
 }

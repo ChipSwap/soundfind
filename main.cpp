@@ -3,14 +3,26 @@
 #include "sound.h"
 #include "asio_helper.h"
 
+// for LoadLibrary
+#include <Windows.h>
+
 // this is static global so we can access it inside the audio callback
 #include <algorithm> // for std::min
 
+// VST
+#define WIN32 // to import the right types
+#include "pluginterfaces/vst2.x/aeffectx.h"
+typedef AEffect* (*PluginEntryProc)(audioMasterCallback audioMaster);
+
+// globals
 static Sound<float> snd_;
 static ASIOHelper asio_;
+static HMODULE module_;
+static PluginEntryProc addr_;
+static AEffect* effect_;
 
 // put our good stuff here -- write out what we want when ASIO requests it
-void MyAudioCallback(int index)
+static void MyAudioCallback(int index)
 {
   // our location within the sound to play back
   static int buf_idx = 0;
@@ -51,6 +63,20 @@ void MyAudioCallback(int index)
   //buf_idx %= snd_.data[0].size();
 }
 
+VstIntPtr VSTCALLBACK HostCallback(AEffect* effect, VstInt32 opcode, VstInt32 index, VstIntPtr value, void* ptr, float opt)
+{
+  VstIntPtr result = 0;
+
+  switch (opcode)
+  {
+  case audioMasterVersion :
+    result = kVstVersion;
+    break;
+  }
+
+  return result;
+}
+
 int main(int argc, char* argv[])
 {
   // read a wav file
@@ -59,4 +85,40 @@ int main(int argc, char* argv[])
   // gets ASIO going and uses our callback as the audio callback
   // use the callback to play it
   asio_.Init(MyAudioCallback);
+
+  // load the library
+  module_ = LoadLibrary("Synth1 VST.dll");
+
+  // get the function pointer
+  addr_ = reinterpret_cast<PluginEntryProc>(GetProcAddress(module_, "VSTPluginMain"));
+  if (addr_ == NULL)
+    addr_ = reinterpret_cast<PluginEntryProc>(GetProcAddress(module_, "main"));
+  if (addr_ == NULL) exit(EXIT_FAILURE);
+
+  // create the effect
+  effect_ = addr_(HostCallback);
+
+  // open
+  VstIntPtr ret = effect_->dispatcher(effect_, effOpen, 0, 0, 0, 0);
+  if (ret != 0) exit(EXIT_FAILURE);
+
+  // set sample rate to be the asio sample rate
+  ret = effect_->dispatcher(effect_, effSetSampleRate, 0, 0, 0, static_cast<float>(asio_.sample_rate_));
+  if (ret != 0) exit(EXIT_FAILURE);
+
+  // set block size to be the asio buffer size
+  ret = effect_->dispatcher(effect_, effSetBlockSize, 0, asio_.buffer_size_, 0, 0);
+  if (ret != 0) exit(EXIT_FAILURE);
+
+  // resume
+	effect_->dispatcher(effect_, effMainsChanged, 0, 1, 0, 0);
+
+  // suspend
+	effect_->dispatcher(effect_, effMainsChanged, 0, 0, 0, 0);
+
+  // infinite loop!
+  for (;;)
+  {
+    int n = 0;
+  }
 }
