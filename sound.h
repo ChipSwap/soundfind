@@ -125,7 +125,50 @@ public:
     file.close();
   }
 
-  void WriteWav();
+  void WriteWav(const std::string& path)
+  {
+    std::ofstream file(path, std::ios::binary);
+    if (!file.is_open()) return;
+
+    if (data.size() <= 0) return;
+
+    int32_t subchunk_1_size = 16; // PCM
+    int16_t audio_format = 1; // uncompressed
+    int16_t num_channels = data.size();
+    int32_t sample_rate = 44100; // hardcoded for now
+    int32_t bits_per_sample = 16; // hardcoded for now
+    int32_t byte_rate = sample_rate * num_channels * bits_per_sample;
+    int16_t block_align = (num_channels * bits_per_sample)>>3;
+    int32_t num_samples = data[0].size();
+    int32_t subchunk_2_size = (num_samples * num_channels * bits_per_sample)>>3;
+    int32_t chunk_size = 36 + subchunk_2_size;
+
+    for (;;)
+    {
+      PutBE32(file, 0x52494646); // "RIFF"
+      PutLE32(file, chunk_size);
+      PutBE32(file, 0x57415645); // "WAVE"
+      PutBE32(file, 0x666d7420); // "fmt "
+      PutLE32(file, subchunk_1_size);
+      PutLE16(file, audio_format);
+      PutLE16(file, num_channels);
+      PutLE32(file, sample_rate);
+      PutLE32(file, byte_rate);
+      PutLE16(file, block_align);
+      PutLE16(file, bits_per_sample);
+      PutBE32(file, 0x64617461); // "data"
+      PutLE32(file, subchunk_2_size);
+
+      for (unsigned int j = 0; j < num_samples; ++j)
+        for (int i = 0; i < num_channels; ++i)
+          PutLE16(file, static_cast<int16_t>(data[i][j] * (data[i][j] > 0 ? INT16_MAX : INT16_MIN)));
+
+      // success
+      break;
+    }
+
+    file.close();
+  }
 
 private:
 
@@ -155,6 +198,34 @@ private:
     uint8_t chars[2];
     file.read(reinterpret_cast<char*>(chars), 2);
     *val = (chars[1] << 16) + (chars[0] << 24);
+  }
+
+  inline void PutLE32(std::ofstream& file, int32_t val)    
+  { 
+    file << static_cast<uint8_t>(((val & 0x000000FF)>> 0))
+         << static_cast<uint8_t>(((val & 0x0000FF00)>> 8))
+         << static_cast<uint8_t>(((val & 0x00FF0000)>>16))
+         << static_cast<uint8_t>(((val & 0xFF000000)>>24));
+  }
+
+  inline void PutBE32(std::ofstream& file, int32_t val) 
+  { 
+    file << static_cast<uint8_t>(((val & 0xFF000000)>>24))
+         << static_cast<uint8_t>(((val & 0x00FF0000)>>16))
+         << static_cast<uint8_t>(((val & 0x0000FF00)>> 8))
+         << static_cast<uint8_t>(((val & 0x000000FF)>> 0));
+  }
+
+  inline void PutLE16(std::ofstream& file, int16_t val)    
+  { 
+    file << static_cast<uint8_t>(((val & 0x00FF)>> 0))
+         << static_cast<uint8_t>(((val & 0xFF00)>> 8));
+  }
+
+  inline void PutBE16(std::ofstream& file, int16_t val) 
+  { 
+    file << static_cast<uint8_t>(((val & 0xFF00)>> 8))
+         << static_cast<uint8_t>(((val & 0x00FF)>> 0));
   }
 
 };
