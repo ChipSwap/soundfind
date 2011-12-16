@@ -137,8 +137,8 @@ public:
     int16_t num_channels = data.size();
     int32_t sample_rate = 44100; // hardcoded for now
     int32_t bits_per_sample = 16; // hardcoded for now
-    int32_t byte_rate = sample_rate * num_channels * bits_per_sample;
     int16_t block_align = (num_channels * bits_per_sample)>>3;
+    int32_t byte_rate = sample_rate * block_align;
     int32_t num_samples = data[0].size();
     int32_t subchunk_2_size = (num_samples * num_channels * bits_per_sample)>>3;
     int32_t chunk_size = 36 + subchunk_2_size;
@@ -159,7 +159,7 @@ public:
       PutBE32(file, 0x64617461); // "data"
       PutLE32(file, subchunk_2_size);
 
-      for (unsigned int j = 0; j < num_samples; ++j)
+      for (int j = 0; j < num_samples; ++j)
         for (int i = 0; i < num_channels; ++i)
           PutLE16(file, static_cast<int16_t>(data[i][j] * (data[i][j] > 0 ? INT16_MAX : INT16_MIN)));
 

@@ -143,7 +143,7 @@ int main(int argc, char* argv[])
 
   // resume
   float    sample_rate = 44100;
-  VstInt32 block_size  = 10*sample_rate;
+  VstInt32 block_size  = static_cast<VstInt32>(10*sample_rate);
 
   effect_->dispatcher(effect_, effSetSampleRate, 0, NULL, NULL, sample_rate);
   effect_->dispatcher(effect_, effSetBlockSize, 0, block_size, NULL, 0.f);
