@@ -36,6 +36,9 @@
     <ClCompile Include="asio_helper.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="vst_helper.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="asio_helper.h">
@@ -46,6 +49,9 @@
     </ClInclude>
     <ClInclude Include="vstsdk2.4\pluginterfaces\vst2.x\aeffectx.h">
       <Filter>Source Files\vst</Filter>
+    </ClInclude>
+    <ClInclude Include="vst_helper.h">
+      <Filter>Source Files</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

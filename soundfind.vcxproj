@@ -81,11 +81,13 @@
     <ClCompile Include="ASIOSDK2\common\asio.cpp" />
     <ClCompile Include="ASIOSDK2\host\asiodrivers.cpp" />
     <ClCompile Include="ASIOSDK2\host\pc\asiolist.cpp" />
+    <ClCompile Include="vst_helper.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="asio_helper.h" />
     <ClInclude Include="sound.h" />
     <ClInclude Include="vstsdk2.4\pluginterfaces\vst2.x\aeffectx.h" />
+    <ClInclude Include="vst_helper.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
