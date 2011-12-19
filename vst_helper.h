@@ -15,7 +15,7 @@ class VSTHelper
 {
 public:
 
-  void Init(const std::string& vst_path);
+  void Init(const std::string& vst_path, float sample_rate);
 
 private:
 

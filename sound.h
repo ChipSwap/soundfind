@@ -9,8 +9,10 @@ class Sound
 {
 public:
 
+  float sample_rate_;
+
   // we can do either float, double, etc.
-  std::vector< std::vector<T> > data;
+  std::vector< std::vector<T> > data_;
 
   void ReadWav(const std::string& path)
   {
@@ -65,6 +67,7 @@ public:
       // get SampleRate
       int32_t sample_rate;
       GetLE32(file, &sample_rate);
+      sample_rate_ = static_cast<float>(sample_rate);
 
       // get ByteRate
       int32_t byte_rate;
@@ -81,7 +84,7 @@ public:
       // get Subchunk2ID
       int32_t subchunk_2_id;
       GetBE32(file, &subchunk_2_id);
-      if (subchunk_2_id != 0x64617461) // "data"
+      if (subchunk_2_id != 0x64617461) // "data_"
         break;
 
       // get Subchunk2Size
@@ -91,13 +94,13 @@ public:
       // get the number of samples
       int num_samples = subchunk_2_size * 8 / num_channels / bits_per_sample;
 
-      // now we can read the actual data!
-      data.clear();
+      // now we can read the actual data_!
+      data_.clear();
 
       // prepare space
-      data.resize(num_channels);
+      data_.resize(num_channels);
       for (int i = 0; i < num_channels; ++i)
-        data[i].resize(num_samples);
+        data_[i].resize(num_samples);
 
       switch (bits_per_sample)
       {
@@ -108,7 +111,7 @@ public:
           {
             int16_t sample;
             GetLE16(file, &sample);
-            data[j][i] = static_cast<T>(sample) / INT16_MAX;
+            data_[j][i] = static_cast<T>(sample) / INT16_MAX;
           }
         }
         break;
@@ -130,16 +133,16 @@ public:
     std::ofstream file(path, std::ios::binary);
     if (!file.is_open()) return;
 
-    if (data.size() <= 0) return;
+    if (data_.size() <= 0) return;
 
     int32_t subchunk_1_size = 16; // PCM
     int16_t audio_format = 1; // uncompressed
-    int16_t num_channels = data.size();
+    int16_t num_channels = data_.size();
     int32_t sample_rate = 44100; // hardcoded for now
     int32_t bits_per_sample = 16; // hardcoded for now
     int16_t block_align = (num_channels * bits_per_sample)>>3;
     int32_t byte_rate = sample_rate * block_align;
-    int32_t num_samples = data[0].size();
+    int32_t num_samples = data_[0].size();
     int32_t subchunk_2_size = (num_samples * num_channels * bits_per_sample)>>3;
     int32_t chunk_size = 36 + subchunk_2_size;
 
@@ -156,12 +159,12 @@ public:
       PutLE32(file, byte_rate);
       PutLE16(file, block_align);
       PutLE16(file, bits_per_sample);
-      PutBE32(file, 0x64617461); // "data"
+      PutBE32(file, 0x64617461); // "data_"
       PutLE32(file, subchunk_2_size);
 
       for (int j = 0; j < num_samples; ++j)
         for (int i = 0; i < num_channels; ++i)
-          PutLE16(file, static_cast<int16_t>(data[i][j] * (data[i][j] > 0 ? INT16_MAX : INT16_MIN)));
+          PutLE16(file, static_cast<int16_t>(data_[i][j] * (data_[i][j] > 0 ? INT16_MAX : INT16_MIN)));
 
       // success
       break;

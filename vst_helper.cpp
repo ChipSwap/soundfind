@@ -21,15 +21,7 @@ VstIntPtr VSTCALLBACK HostCallback(AEffect* effect, VstInt32 opcode, VstInt32 in
   return result;
 }
 
-  //// set sample rate to be the asio sample rate
-  //ret = effect_->dispatcher(effect_, effSetSampleRate, 0, 0, 0, sample_rate);
-  //if (ret != 0) exit(EXIT_FAILURE);
-
-  //// set block size to be the asio buffer size
-  //ret = effect_->dispatcher(effect_, effSetBlockSize, 0, buffer_size, 0, 0);
-  //if (ret != 0) exit(EXIT_FAILURE);
-
-void VSTHelper::Init(const std::string& vst_path)
+void VSTHelper::Init(const std::string& vst_path, float sample_rate)
 {
   // load the library
   module_ = LoadLibrary(vst_path.c_str());
@@ -78,7 +70,7 @@ void VSTHelper::Init(const std::string& vst_path)
 		//printf("Param %03d: %s [%s %s] (normalized = %f)\n", i, paramName, paramDisplay, paramLabel, value);
 	}
 
-  effect_->setParameter(effect_, 0, 1.f);
+  //effect_->setParameter(effect_, 0, 1.f);
 
   VstMidiEvent midi_event = { 0 };
   midi_event.type = kVstMidiType;
@@ -95,12 +87,21 @@ void VSTHelper::Init(const std::string& vst_path)
   ev.numEvents = 1;
   ev.events[0] = reinterpret_cast<VstEvent*>(&midi_event);
 
-  // resume
-  float    sample_rate = 44100;
-  VstInt32 block_size  = static_cast<VstInt32>(10*sample_rate);
+  // set sample rate
+  ret = effect_->dispatcher(effect_, effSetSampleRate, 0, 0, 0, sample_rate);
+  if (ret != 0) exit(EXIT_FAILURE);
 
-  effect_->dispatcher(effect_, effSetSampleRate, 0, NULL, NULL, sample_rate);
-  effect_->dispatcher(effect_, effSetBlockSize, 0, block_size, NULL, 0.f);
+  //// set block size to be the asio buffer size
+  //ret = effect_->dispatcher(effect_, effSetBlockSize, 0, buffer_size, 0, 0);
+  //if (ret != 0) exit(EXIT_FAILURE);
+
+
+  // resume
+  //float    sample_rate = 44100;
+  //VstInt32 block_size  = static_cast<VstInt32>(10*sample_rate);
+
+  //effect_->dispatcher(effect_, effSetSampleRate, 0, NULL, NULL, sample_rate);
+  //effect_->dispatcher(effect_, effSetBlockSize, 0, block_size, NULL, 0.f);
 
 	effect_->dispatcher(effect_, effMainsChanged, 0, 1, 0, 0);
 

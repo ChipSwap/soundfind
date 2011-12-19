@@ -64,14 +64,14 @@ int main(int argc, char* argv[])
   std::string vst_path = argv[1];
 
   // read a wav file
-  //snd_.ReadWav("C:/Users/clarkson/Desktop/test.wav");
+  snd_.ReadWav("bwip.wav");
 
   // gets ASIO going and uses our callback as the audio callback
   // use the callback to play it
   asio_.Init(MyAudioCallback);
 
   // start up a VST given the path to the DLL
-  vst_.Init(vst_path.c_str());
+  vst_.Init(vst_path.c_str(), snd_.sample_rate_);
 
 
 }
