@@ -2,7 +2,6 @@
 *.opensdf
 *.ncb
 *.suo
-*.user
 Debug/
 Release/
 ipch/
