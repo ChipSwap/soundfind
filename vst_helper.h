@@ -16,6 +16,7 @@ class VSTHelper
 public:
 
   void Init(const std::string& vst_path, float sample_rate);
+  void GenerateOutput(VstInt32 block_size, float* output[2]);
 
 private:
 

@@ -55,6 +55,17 @@ static void MyAudioCallback(int index)
   ////buf_idx %= snd_.data[0].size();
 }
 
+template <class T>
+float CalculateSonicDifference(Sound<T> snd, float* cmp[2])
+{
+  // SSD
+  float diff = 0.f;
+  for (unsigned int i = 0; i < std::min(snd.data_.size(), static_cast<unsigned int>(2)); ++i)
+    for (unsigned int j = 0; j < snd.data_[i].size(); ++j)
+      diff += (cmp[i][j] - snd.data_[i][j]) * (cmp[i][j] - snd.data_[i][j]);
+  return diff;
+}
+
 int main(int argc, char* argv[])
 {
   if (argc < 2)
@@ -73,5 +84,19 @@ int main(int argc, char* argv[])
   // start up a VST given the path to the DLL
   vst_.Init(vst_path.c_str(), snd_.sample_rate_);
 
+  // get our sound length
+  unsigned int snd_len = snd_.data_[0].size();
 
+  // get some output
+  float* output[2];
+  output[0] = new float[snd_len];
+  output[1] = new float[snd_len];
+
+  vst_.GenerateOutput(snd_len, output);
+
+  // check the difference
+  float diff = CalculateSonicDifference(snd_, output);
+
+  delete[] output[0];
+  delete[] output[1];
 }

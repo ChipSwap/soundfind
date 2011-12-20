@@ -72,21 +72,6 @@ void VSTHelper::Init(const std::string& vst_path, float sample_rate)
 
   //effect_->setParameter(effect_, 0, 1.f);
 
-  VstMidiEvent midi_event = { 0 };
-  midi_event.type = kVstMidiType;
-  midi_event.byteSize = sizeof(VstMidiEvent);
-  
-  // set the midi data
-  midi_event.midiData[0] = (char)0x90; // channel 1 note on
-  midi_event.midiData[1] = 60;   // C4
-  midi_event.midiData[2] = 127;  // max velocity
-    
-  midi_event.flags = kVstMidiEventIsRealtime;
-
-  VstEvents ev = { 0 };
-  ev.numEvents = 1;
-  ev.events[0] = reinterpret_cast<VstEvent*>(&midi_event);
-
   // set sample rate
   ret = effect_->dispatcher(effect_, effSetSampleRate, 0, 0, 0, sample_rate);
   if (ret != 0) exit(EXIT_FAILURE);
@@ -101,9 +86,6 @@ void VSTHelper::Init(const std::string& vst_path, float sample_rate)
   //VstInt32 block_size  = static_cast<VstInt32>(10*sample_rate);
 
   //effect_->dispatcher(effect_, effSetSampleRate, 0, NULL, NULL, sample_rate);
-  //effect_->dispatcher(effect_, effSetBlockSize, 0, block_size, NULL, 0.f);
-
-	effect_->dispatcher(effect_, effMainsChanged, 0, 1, 0, 0);
 
   // set up outputs
   //Sound<float> output;
@@ -126,11 +108,40 @@ void VSTHelper::Init(const std::string& vst_path, float sample_rate)
   // infinite loop!
   //for (;;)
   {
-    effect_->dispatcher(effect_, effProcessEvents, 0, 0, &ev, 0.f);
-    //effect_->processReplacing(effect_, NULL, output_pass, block_size);
   }
 
   //output.WriteWav("output.wav");
+}
+
+void VSTHelper::GenerateOutput(VstInt32 block_size, float* output[])
+{
+  // set the block size
+  effect_->dispatcher(effect_, effSetBlockSize, 0, block_size, NULL, 0.f);
+
+  // create a midi event
+  VstMidiEvent midi_event = { 0 };
+  midi_event.type = kVstMidiType;
+  midi_event.byteSize = sizeof(VstMidiEvent);
+  
+  // set the midi data
+  midi_event.midiData[0] = (char)0x90; // channel 1 note on
+  midi_event.midiData[1] = 60;   // C4
+  midi_event.midiData[2] = 127;  // max velocity
+    
+  midi_event.flags = kVstMidiEventIsRealtime;
+
+  VstEvents ev = { 0 };
+  ev.numEvents = 1;
+  ev.events[0] = reinterpret_cast<VstEvent*>(&midi_event);
+
+  // resume
+	effect_->dispatcher(effect_, effMainsChanged, 0, 1, 0, 0);
+
+  // process the midi event
+  effect_->dispatcher(effect_, effProcessEvents, 0, 0, &ev, 0.f);
+
+  // get the output
+  effect_->processReplacing(effect_, NULL, output, block_size);
 
   // suspend
 	effect_->dispatcher(effect_, effMainsChanged, 0, 0, 0, 0);
