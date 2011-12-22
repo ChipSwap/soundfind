@@ -86,7 +86,13 @@ float CalculateSonicDifference(Sound<T> snd, float* cmp[2])
   return diff;
 }
 
+//VstSpeakerArrangement spk_arr = { 0 };
+//spk_arr.type        = kSpeakerArrStereo;
+//spk_arr.numChannels = 2;
+//VstSpeakerArrangement* spk_arr_out = (VstSpeakerArrangement*)eff->dispatcher(eff, effSetSpeakerArrangement, 0, 0, &spk_arr, 0);
+
 typedef AEffect* (*Plug)(audioMasterCallback audioMaster);
+static VstTimeInfo time_info_ = { 0 };
 
 VstIntPtr VSTCALLBACK MyHostCallback(AEffect* effect, VstInt32 opcode, VstInt32 index, VstIntPtr value, void* ptr, float opt) 
 { 
@@ -94,6 +100,27 @@ VstIntPtr VSTCALLBACK MyHostCallback(AEffect* effect, VstInt32 opcode, VstInt32 
   {
   case audioMasterVersion:
     return kVstVersion;
+  case audioMasterGetTime:
+    
+    // set basic data
+    // everything else is 0
+    time_info_.sampleRate         = 44100;
+    time_info_.tempo              = 120;
+    time_info_.timeSigNumerator   = 4;
+    time_info_.timeSigDenominator = 4;
+
+    time_info_.flags |= kVstTransportChanged;
+    time_info_.flags |= kVstTransportPlaying;
+    time_info_.flags |= kVstNanosValid;
+    time_info_.flags |= kVstPpqPosValid;
+    time_info_.flags |= kVstTempoValid;
+    time_info_.flags |= kVstBarsValid;
+    time_info_.flags |= kVstCyclePosValid;
+    time_info_.flags |= kVstTimeSigValid;
+    time_info_.flags |= kVstSmpteValid;
+    time_info_.flags |= kVstClockValid;
+
+    return (VstIntPtr)&time_info_;
   }
 
   return NULL;
@@ -114,11 +141,20 @@ int main(int argc, char* argv[])
   output[1] = new float[block_size];
 
   eff->dispatcher(eff, effOpen, 0, 0, 0, 0);
-  eff->dispatcher(eff, effSetSampleRate, 0, 0, 0, sample_rate);
-  eff->dispatcher(eff, effSetBlockSize, 0, block_size, 0, 0);
-  eff->dispatcher(eff, effMainsChanged, 0, 1, 0, 0);
-  eff->processReplacing(eff, NULL, output, block_size);
-  eff->dispatcher(eff, effMainsChanged, 0, 0, 0, 0);
+
+  for (;;)
+  {
+    eff->dispatcher(eff, effSetSampleRate, 0, 0, 0, sample_rate);
+    eff->dispatcher(eff, effSetBlockSize, 0, block_size, 0, 0);
+    eff->dispatcher(eff, effMainsChanged, 0, 1, 0, 0);
+    
+    memset(output[0], 0, sizeof(float) * block_size);
+    memset(output[1], 0, sizeof(float) * block_size);
+    eff->processReplacing(eff, NULL, output, block_size);
+
+    eff->dispatcher(eff, effMainsChanged, 0, 0, 0, 0);
+  }
+
   eff->dispatcher(eff, effClose, 0, 0, 0, 0);
 
   delete[] output[0];
