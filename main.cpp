@@ -1,31 +1,35 @@
 #define NOMINMAX // don't let windows screw up min()
+#include <Windows.h> // for critical sections
 
 #include "sound.h"
 #include "asio_helper.h"
 #include "vst_helper.h"
 
-// this is static global so we can access it inside the audio callback
 #include <algorithm> // for std::min
 #include <fstream> // for if/ofstream
-#include <Windows.h> // for mutexes
+#include <random> // for good random numbers
+#include <iostream> // for cout
 
 // globals
 static CRITICAL_SECTION snd_crit_;
 
-static Sound<float> snd_;        // our loaded sound
-static Sound<float> best_match_; // our best match
+static Sound<float> snd_;                             // our loaded sound
+static std::vector< std::vector<float> > best_match_; // our best match
+static float best_diff_ = FLT_MAX;
 
 static int buf_idx_ = 0;
 static ASIOHelper asio_;
 static VSTHelper vst_;
+
+static std::tr1::mt19937 eng_; // our random engine
+static std::tr1::uniform_real<float> unif_(0, 1); // a random number distribution between 0 and 1
 
 // put our good stuff here -- write out what we want when ASIO requests it
 static void MyAudioCallback(int index)
 {
   EnterCriticalSection(&snd_crit_);
 
-  // choose which sound to play
-  const Sound<float>& s = best_match_;
+  const std::vector< std::vector<float> >& s = best_match_;
 
   // go through the buffers, only using outputs
   ASIOBufferInfo*  b = asio_.buffer_infos_  + asio_.input_channels_;
@@ -44,8 +48,8 @@ static void MyAudioCallback(int index)
 
           // read from sound file
           // take the corresponding channel index if it exists
-          int channel = std::min(static_cast<unsigned int>(j), s.data_.size() - 1);
-          float smp = s.data_[channel][(buf_idx_ + j) % s.data_[channel].size()];
+          int channel = std::min(static_cast<unsigned int>(j), s.size() - 1);
+          float smp = s[channel][(buf_idx_ + j) % s[channel].size()];
           
           // place the output
           *int32_p++ = static_cast<int32_t>(smp * (smp >= 0 ? INT32_MAX : INT32_MIN));
@@ -62,7 +66,7 @@ static void MyAudioCallback(int index)
   // adjust the location within the sound for next output
   // assume that each channel contains the same amount of info
   buf_idx_ += asio_.buffer_size_;
-  buf_idx_ %= s.data_[0].size();
+  buf_idx_ %= s[0].size();
 }
 
 template <class T>
@@ -101,26 +105,46 @@ int main(int argc, char* argv[])
   unsigned int snd_len = snd_.data_[0].size();
 
   // get some output
-  best_match_.data_ = std::vector< std::vector<float> >(2, std::vector<float>(snd_len, 0));
+  std::vector< std::vector<float> > generated = std::vector< std::vector<float> >(2, std::vector<float>(snd_len, 0));
   
   // get pointers to generate the output
   float* output[2];
-  output[0] = &(*best_match_.data_[0].begin());
-  output[1] = &(*best_match_.data_[1].begin());
+  output[0] = &(*generated[0].begin());
+  output[1] = &(*generated[1].begin());
 
-  vst_.GenerateOutput(snd_len, output);
+  // for all eternity...
+  for (;;)
+  {
+    // make a sound given the current values
+    vst_.GenerateOutput(snd_len, output);
 
-  // check the difference
-  float diff = CalculateSonicDifference(snd_, output);
+    // check the difference
+    float diff = CalculateSonicDifference(snd_, output);
+    
+    // copy into best match
+    if (diff < best_diff_)
+    {
+      EnterCriticalSection(&snd_crit_);
+      best_match_ = generated;
+      LeaveCriticalSection(&snd_crit_);
+      best_diff_  = diff;
 
-  vst_.SaveCurrentProgram("pgm.fxp");
+      std::cout << best_diff_ << std::endl;
+    }
+
+    // set all parameters randomly!
+    for (int i = 0; i < vst_.GetNumParams(); ++i)
+      vst_.SetParam(i, unif_(eng_));
+  }
+
+  /*vst_.SaveCurrentProgram("pgm.fxp");
 
   float val_b = vst_.GetParam(0);
   vst_.SetParam(0, 0.123456f);
   float val_a = vst_.GetParam(0);
 
   vst_.LoadProgram("pgm.fxp");
-  val_a = vst_.GetParam(0);
+  val_a = vst_.GetParam(0);*/
 
   DeleteCriticalSection(&snd_crit_);
 }

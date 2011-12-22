@@ -24,6 +24,7 @@ public:
   
   //unsigned int GetNumParams() { return params_.size(); }
   
+  int   GetNumParams() { return effect_->numParams; }
   void  SetParam(unsigned int index, float value);
   float GetParam(unsigned int index);
 
