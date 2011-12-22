@@ -4,7 +4,7 @@
 // for HMODULE, LoadLibrary
 #include <Windows.h>
 
-// For AEffect
+// For AEffectX
 #define   WIN32 // to import the right types
 #include "pluginterfaces/vst2.x/aeffectx.h"
 #include "pluginterfaces/vst2.x/vstfxstore.h"
@@ -16,8 +16,7 @@ class VSTHelper
 {
 public:
 
-  void Init(const std::string& vst_path, float sample_rate);
-  void GenerateOutput(VstInt32 block_size, float* output[2]);
+  void GenerateOutput(const std::string& vst_path, float sample_rate, VstInt32 block_size, float* output[2]);
   
   void LoadProgram(const std::string& path);
   void SaveCurrentProgram(const std::string& path);
@@ -28,10 +27,13 @@ public:
   void  SetParam(unsigned int index, float value);
   float GetParam(unsigned int index);
 
+  void Open(const std::string& vst_path);
+  void Close();
+
 private:
 
-  HMODULE         module_;
-  AEffect*        effect_;
+  HMODULE  module_;
+  AEffect* effect_;
 
   //typedef struct
   //{
@@ -41,7 +43,6 @@ private:
   //  float value;
   //} Param;
 
-  bool in_chunks_;
   //std::vector<Param> params_;
 
 };

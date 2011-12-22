@@ -9,42 +9,43 @@ typedef AEffect* (*PluginEntryProc)(audioMasterCallback audioMaster);
 // are limited to 8, but at least one implementation (Synth1) uses more
 // than this length and ends up crashing stuff.
 static const int kVstExtMaxParamStrLen = kVstMaxParamStrLen<<5;
+static VstTimeInfo time_info_;
 
 VstIntPtr VSTCALLBACK HostCallback(AEffect* effect, VstInt32 opcode, VstInt32 index, VstIntPtr value, void* ptr, float opt)
 {
-  VstIntPtr result = 0;
+  VstIntPtr result;
 
   switch (opcode)
   {
-  case audioMasterVersion :
+  case audioMasterVersion:
     result = kVstVersion;
+    break;
+
+  case audioMasterGetTime:
+    memset(&time_info_, 0, sizeof(VstTimeInfo));
+    time_info_.flags |= kVstTransportChanged;
+    time_info_.flags |= kVstTransportPlaying;
+    result = reinterpret_cast<VstIntPtr>(&time_info_);
+    break;
+
+  case audioMasterGetOutputLatency:
+    result = 0;
+    break;
+
+  case audioMasterWantMidi:
+    result = 0;
+    break;
+
+  case audioMasterUpdateDisplay:
+    result = 0;
     break;
   }
 
   return result;
 }
 
-void VSTHelper::Init(const std::string& vst_path, float sample_rate)
-{
-  // load the library
-  module_ = LoadLibrary(vst_path.c_str());
-
-  // get the function pointer
-  PluginEntryProc addr_ = reinterpret_cast<PluginEntryProc>(GetProcAddress(module_, "VSTPluginMain"));
-  if (addr_ == NULL)
-    addr_ = reinterpret_cast<PluginEntryProc>(GetProcAddress(module_, "main"));
-  if (addr_ == NULL) exit(EXIT_FAILURE);
-
-  // create the effect
-  effect_ = addr_(HostCallback);
-
-  // open
-  VstIntPtr ret = effect_->dispatcher(effect_, effOpen, 0, 0, 0, 0);
-  if (ret != 0) exit(EXIT_FAILURE);
-
-  // are programs in chunks?
-  in_chunks_ = (effect_->flags & effFlagsProgramChunks) != 0;
-
+//void VSTHelper::Init(const std::string& vst_path)
+//{
  // // get parameter info
  // params_.clear();
 	//for (VstInt32 i = 0; i < effect_->numParams; i++)
@@ -81,10 +82,6 @@ void VSTHelper::Init(const std::string& vst_path, float sample_rate)
 
   //effect_->setParameter(effect_, 0, 1.f);
 
-  // set sample rate
-  ret = effect_->dispatcher(effect_, effSetSampleRate, 0, 0, 0, sample_rate);
-  if (ret != 0) exit(EXIT_FAILURE);
-
   //// set block size to be the asio buffer size
   //ret = effect_->dispatcher(effect_, effSetBlockSize, 0, buffer_size, 0, 0);
   //if (ret != 0) exit(EXIT_FAILURE);
@@ -116,49 +113,181 @@ void VSTHelper::Init(const std::string& vst_path, float sample_rate)
 
   // infinite loop!
   //for (;;)
-  {
-  }
+  //{
+  //}
 
   //output.WriteWav("output.wav");
+//}
+
+void VSTHelper::Open(const std::string& vst_path)
+{
+  // load the library
+  if (module_ == NULL)
+    module_ = LoadLibrary(vst_path.c_str());
+
+  // get the function pointer
+  PluginEntryProc addr_ = reinterpret_cast<PluginEntryProc>(GetProcAddress(module_, "VSTPluginMain"));
+  if (addr_ == NULL)
+    addr_ = reinterpret_cast<PluginEntryProc>(GetProcAddress(module_, "main"));
+  if (addr_ == NULL) exit(EXIT_FAILURE);
+
+  // create the effect
+  effect_ = addr_(HostCallback);
+
+  // get the version
+  int version = effect_->dispatcher(effect_, effGetVstVersion, 0, 0, 0, 0);
+
+  // open
+  VstIntPtr ret = effect_->dispatcher(effect_, effOpen, 0, 0, 0, 0);
+
+  // set to program 0
+  effect_->dispatcher(effect_, effSetProgram, 0, 0, 0, 0);
+
+  float* input[2];
+  input[0] = new float[512];
+  input[1] = new float[512];
+  float* junk[2];
+  junk[0] = new float[512];
+  junk[1] = new float[512];
+
+  effect_->dispatcher(effect_, effSetSampleRate, 0, 0, 0, 44100);
+  effect_->dispatcher(effect_, effSetBlockSize, 0, 512, NULL, 0.f);
+
+	effect_->dispatcher(effect_, effMainsChanged, 0, 1, 0, 0);
+  memset(input[0], 0, sizeof(float) * 512);
+  memset(input[1], 0, sizeof(float) * 512);
+  memset(junk[0], 0, sizeof(float) * 512);
+  memset(junk[1], 0, sizeof(float) * 512);
+  effect_->process(effect_, input, junk, 512);
+	effect_->dispatcher(effect_, effMainsChanged, 0, 0, 0, 0);
+
+	effect_->dispatcher(effect_, effMainsChanged, 0, 1, 0, 0);
+  memset(input[0], 0, sizeof(float) * 512);
+  memset(input[1], 0, sizeof(float) * 512);
+  memset(junk[0], 0, sizeof(float) * 512);
+  memset(junk[1], 0, sizeof(float) * 512);
+  effect_->process(effect_, input, junk, 512);
+	effect_->dispatcher(effect_, effMainsChanged, 0, 0, 0, 0);
+
+	effect_->dispatcher(effect_, effMainsChanged, 0, 1, 0, 0);
+  memset(input[0], 0, sizeof(float) * 512);
+  memset(input[1], 0, sizeof(float) * 512);
+  memset(junk[0], 0, sizeof(float) * 512);
+  memset(junk[1], 0, sizeof(float) * 512);
+  effect_->process(effect_, input, junk, 512);
+	effect_->dispatcher(effect_, effMainsChanged, 0, 0, 0, 0);
+
+  delete[] junk[0];
+  delete[] junk[1];
+
+  bool can_replacing = (effect_->flags & effFlagsCanReplacing) != 0;
 }
 
-void VSTHelper::GenerateOutput(VstInt32 block_size, float* output[])
+void VSTHelper::Close()
 {
+  effect_->dispatcher(effect_, effClose, 0, 0, 0, 0);
+
+  //FreeLibrary(module_);
+}
+
+void VSTHelper::GenerateOutput(const std::string& vst_path, float sample_rate, VstInt32 block_size, float* output[])
+{  
+  block_size = 512;
+
+  // our vst events
+  VstEvents ev = { 0 };
+
+  //Open(vst_path);
+
+  // set sample rate
+  effect_->dispatcher(effect_, effSetSampleRate, 0, 0, 0, sample_rate);
+
   // set the block size
   effect_->dispatcher(effect_, effSetBlockSize, 0, block_size, NULL, 0.f);
 
-  // create a midi event
-  VstMidiEvent midi_event = { 0 };
-  midi_event.type = kVstMidiType;
-  midi_event.byteSize = sizeof(VstMidiEvent);
-  
-  // set the midi data
-  midi_event.midiData[0] = (char)0x90; // channel 1 note on
-  midi_event.midiData[1] = 60;   // C4
-  midi_event.midiData[2] = 127;  // max velocity
+  // create a note on
+  VstMidiEvent note_on = { 0 };
+  note_on.type         = kVstMidiType;
+  note_on.byteSize     = sizeof(VstMidiEvent);
+  note_on.midiData[0]  = (char)0x90; // channel 1 note on
+  note_on.midiData[1]  = 60;   // C4
+  note_on.midiData[2]  = 127;  // max velocity
     
-  midi_event.flags = kVstMidiEventIsRealtime;
-
-  VstEvents ev = { 0 };
-  ev.numEvents = 1;
-  ev.events[0] = reinterpret_cast<VstEvent*>(&midi_event);
+  //note_on.flags = kVstMidiEventIsRealtime;
 
   // resume
 	effect_->dispatcher(effect_, effMainsChanged, 0, 1, 0, 0);
 
-  // process the midi event
-  effect_->dispatcher(effect_, effProcessEvents, 0, 0, &ev, 0.f);
+  // process the ON events
+  ev.numEvents = 1;
+  ev.events[0] = reinterpret_cast<VstEvent*>(&note_on);
+  effect_->dispatcher(effect_, effProcessEvents, 0, 0, &ev, 0);
+
+  float* input[2];
+  input[0] = new float[block_size];
+  input[1] = new float[block_size];
+  memset(input[0], 0, sizeof(float) * block_size);
+  memset(input[1], 0, sizeof(float) * block_size);
+
+  // run processReplacing with no midi data...
+  effect_->processReplacing(effect_, input, output, block_size);
+
+  // process the ON events
+  ev.numEvents = 1;
+  ev.events[0] = reinterpret_cast<VstEvent*>(&note_on);
+  effect_->dispatcher(effect_, effProcessEvents, 0, 0, &ev, 0);
+
+  effect_->processReplacing(effect_, input, output, block_size);
+  effect_->processReplacing(effect_, input, output, block_size);
+  effect_->processReplacing(effect_, input, output, block_size);
+  effect_->processReplacing(effect_, input, output, block_size);
+  effect_->processReplacing(effect_, input, output, block_size);
+  effect_->processReplacing(effect_, input, output, block_size);
+  effect_->processReplacing(effect_, input, output, block_size);
+  effect_->processReplacing(effect_, input, output, block_size);
+  effect_->processReplacing(effect_, input, output, block_size);
+  effect_->processReplacing(effect_, input, output, block_size);
+  effect_->processReplacing(effect_, input, output, block_size);
+  effect_->processReplacing(effect_, input, output, block_size);
+
+  delete[] input[0];
+  delete[] input[1];
 
   // get the output
   effect_->processReplacing(effect_, NULL, output, block_size);
 
+  //---
+
+  VstMidiEvent all_off = { 0 };
+  all_off.type = kVstMidiType;
+  all_off.byteSize = sizeof(VstMidiEvent);
+  all_off.midiData[0] = (char)0xB0; // channel mode message
+  all_off.midiData[1] = 120;   // all sound off
+  all_off.midiData[2] = 0;  // max velocity
+
+  // process the OFF events
+  ev.numEvents = 1;
+  ev.events[0] = reinterpret_cast<VstEvent*>(&all_off);
+  effect_->dispatcher(effect_, effProcessEvents, 0, 0, &ev, 0);
+
+  // process into junk area
+  float* junk[2];
+  junk[0] = new float[block_size];
+  junk[1] = new float[block_size];
+  effect_->processReplacing(effect_, NULL, junk, block_size);
+  delete[] junk[0];
+  delete[] junk[1];
+
   // suspend
 	effect_->dispatcher(effect_, effMainsChanged, 0, 0, 0, 0);
+
+  //Close();
 }
 
 void VSTHelper::LoadProgram(const std::string& path)
 {
   std::ifstream program(path, std::ios::binary);
+  if (program.fail()) return;
 
   // get length of file:
   program.seekg(0, std::ios::end);
@@ -169,7 +298,9 @@ void VSTHelper::LoadProgram(const std::string& path)
   program.read(data, length);
   
   // 0 for bank, 1 for program
+  //effect_->dispatcher(effect_, effBeginSetProgram, 0, 0, 0, 0);
   int ret = effect_->dispatcher(effect_, effSetChunk, 1, length, data, 0);
+  //effect_->dispatcher(effect_, effEndSetProgram, 0, 0, 0, 0);
 
   delete[] data;
 
@@ -181,6 +312,10 @@ void VSTHelper::LoadProgram(const std::string& path)
 
 void VSTHelper::SaveCurrentProgram(const std::string& path)
 {
+  // are programs in chunks?
+  if (!(effect_->flags & effFlagsProgramChunks))
+    return;
+
   void* chunk;
 
   // 0 for bank, 1 for program
