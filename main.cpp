@@ -113,7 +113,14 @@ int main(int argc, char* argv[])
   // check the difference
   float diff = CalculateSonicDifference(snd_, output);
 
-  for (;;) {}
+  vst_.SaveCurrentProgram("pgm.fxp");
+
+  float val_b = vst_.GetParam(0);
+  vst_.SetParam(0, 0.123456f);
+  float val_a = vst_.GetParam(0);
+
+  vst_.LoadProgram("pgm.fxp");
+  val_a = vst_.GetParam(0);
 
   DeleteCriticalSection(&snd_crit_);
 }

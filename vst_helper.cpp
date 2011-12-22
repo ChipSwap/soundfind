@@ -1,5 +1,8 @@
 #include "vst_helper.h"
 
+#include <fstream> // for saving programs
+#include <list> // for reading from file
+
 typedef AEffect* (*PluginEntryProc)(audioMasterCallback audioMaster);
 
 // We use this, because it looks like technically the parameter string lengths
@@ -39,36 +42,42 @@ void VSTHelper::Init(const std::string& vst_path, float sample_rate)
   VstIntPtr ret = effect_->dispatcher(effect_, effOpen, 0, 0, 0, 0);
   if (ret != 0) exit(EXIT_FAILURE);
 
-  // get parameter info
-  param_names_.clear();
-  param_labels_.clear();
-  param_displays_.clear();
-	for (VstInt32 i = 0; i < effect_->numParams; i++)
-	{
-    char param_info[kVstExtMaxParamStrLen];
+  // are programs in chunks?
+  in_chunks_ = (effect_->flags & effFlagsProgramChunks) != 0;
 
-    // name
-		effect_->dispatcher(effect_, effGetParamName, i, 0, param_info, 0);
-    param_names_.push_back(param_info);
+ // // get parameter info
+ // params_.clear();
+	//for (VstInt32 i = 0; i < effect_->numParams; i++)
+	//{
+ //   char param_info[kVstExtMaxParamStrLen];
 
-    // label
-		effect_->dispatcher(effect_, effGetParamLabel, i, 0, param_info, 0);
-    param_labels_.push_back(param_info);
+ //   // our param to stick on
+ //   Param p;
 
-    // display
-		effect_->dispatcher(effect_, effGetParamDisplay, i, 0, param_info, 0);
-    param_displays_.push_back(param_info);
+ //   // name
+	//	effect_->dispatcher(effect_, effGetParamName, i, 0, param_info, 0);
+ //   p.name_ = param_info;
 
-    // value
-		float value = effect_->getParameter(effect_, i);
-    param_values_.push_back(value);
+ //   // label
+	//	effect_->dispatcher(effect_, effGetParamLabel, i, 0, param_info, 0);
+ //   p.label_ = param_info;
 
-    // isn't necessarily supported
-    VstParameterProperties props = { 0 };
-    VstIntPtr ret = effect_->dispatcher(effect_, effGetParameterProperties, i, 0, &props, 0);
+ //   // display
+	//	effect_->dispatcher(effect_, effGetParamDisplay, i, 0, param_info, 0);
+ //   p.display_ = param_info;
 
-		//printf("Param %03d: %s [%s %s] (normalized = %f)\n", i, paramName, paramDisplay, paramLabel, value);
-	}
+ //   // value
+	//	p.value = effect_->getParameter(effect_, i);
+
+ //   // isn't necessarily supported
+ //   VstParameterProperties props = { 0 };
+ //   VstIntPtr ret = effect_->dispatcher(effect_, effGetParameterProperties, i, 0, &props, 0);
+
+	//	//printf("Param %03d: %s [%s %s] (normalized = %f)\n", i, paramName, paramDisplay, paramLabel, value);
+ //   
+ //   // add our param
+ //   params_.push_back(p);
+	//}
 
   //effect_->setParameter(effect_, 0, 1.f);
 
@@ -145,4 +154,55 @@ void VSTHelper::GenerateOutput(VstInt32 block_size, float* output[])
 
   // suspend
 	effect_->dispatcher(effect_, effMainsChanged, 0, 0, 0, 0);
+}
+
+void VSTHelper::LoadProgram(const std::string& path)
+{
+  std::ifstream program(path, std::ios::binary);
+
+  // get length of file:
+  program.seekg(0, std::ios::end);
+  int length = static_cast<int>(program.tellg());
+  program.seekg(0, std::ios::beg);
+
+  char* data = new char[length];
+  program.read(data, length);
+  
+  // 0 for bank, 1 for program
+  int ret = effect_->dispatcher(effect_, effSetChunk, 1, length, data, 0);
+
+  delete[] data;
+
+  //void* chunk;
+  //int byte_size = effect_->dispatcher(effect_, effGetChunk, 1, 0, &chunk, 0);
+
+  program.close();
+}
+
+void VSTHelper::SaveCurrentProgram(const std::string& path)
+{
+  void* chunk;
+
+  // 0 for bank, 1 for program
+  int byte_size = effect_->dispatcher(effect_, effGetChunk, 1, 0, &chunk, 0);
+
+  std::ofstream program(path, std::ios::binary);
+  program.write(reinterpret_cast<char*>(chunk), byte_size);
+  program.close();
+}
+
+void VSTHelper::SetParam(unsigned int index, float value)
+{
+  if (index >= static_cast<unsigned int>(effect_->numParams))
+    return;
+
+  effect_->setParameter(effect_, index, value);
+}
+
+float VSTHelper::GetParam(unsigned int index)
+{
+  if (index >= static_cast<unsigned int>(effect_->numParams))
+    return 0.f;
+  
+  return effect_->getParameter(effect_, index);
 }
