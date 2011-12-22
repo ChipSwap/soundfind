@@ -125,7 +125,7 @@ int main (int argc, char* argv[])
 		return -1;
 	}
 
-	const char* fileName = "C:/Users/Ian/Desktop/Synth1/Synth1 VST.dll";
+	const char* fileName = "../../../../../../Synth1 VST.dll";
 	//const char* fileName = "again.dll";
 	//const char* fileName = "adelay.dll";
 	//const char* fileName = "surrounddelay.dll";
