@@ -3,6 +3,8 @@
 #include <fstream> // for saving programs
 #include <list> // for reading from file
 
+#include "endian.h"
+
 typedef AEffect* (*PluginEntryProc)(audioMasterCallback audioMaster);
 
 // We use this, because it looks like technically the parameter string lengths
@@ -201,15 +203,27 @@ void VSTHelper::LoadProgram(const std::string& path)
   int length = static_cast<int>(program.tellg());
   program.seekg(0, std::ios::beg);
 
-  char* data = new char[length];
-  program.read(data, length);
+  // our program
+  fxProgram pgm;
+  GetBE32(program, &pgm.chunkMagic);
+  GetBE32(program, &pgm.byteSize);
+  GetBE32(program, &pgm.fxMagic);
+  GetBE32(program, &pgm.version);
+  GetBE32(program, &pgm.fxID);
+  GetBE32(program, &pgm.fxVersion);
+  GetBE32(program, &pgm.numParams);
+  program.read(pgm.prgName, sizeof(pgm.prgName));
+  GetBE32(program, &pgm.content.data.size);
+
+  char* chunk = new char[pgm.content.data.size];
+  program.read(chunk, pgm.content.data.size);
   
   // 0 for bank, 1 for program
   //effect_->dispatcher(effect_, effBeginSetProgram, 0, 0, 0, 0);
-  int ret = effect_->dispatcher(effect_, effSetChunk, 1, length, data, 0);
+  int ret = effect_->dispatcher(effect_, effSetChunk, 1, length, chunk, 0);
   //effect_->dispatcher(effect_, effEndSetProgram, 0, 0, 0, 0);
 
-  delete[] data;
+  delete[] chunk;
 
   //void* chunk;
   //int byte_size = effect_->dispatcher(effect_, effGetChunk, 1, 0, &chunk, 0);
@@ -223,13 +237,38 @@ void VSTHelper::SaveCurrentProgram(const std::string& path)
   if (!(effect_->flags & effFlagsProgramChunks))
     return;
 
-  void* chunk;
-
   // 0 for bank, 1 for program
+  void* chunk;
   int byte_size = effect_->dispatcher(effect_, effGetChunk, 1, 0, &chunk, 0);
 
+  // make a program
+  fxProgram pgm;
+  pgm.chunkMagic = cMagic;
+  pgm.byteSize   = byte_size + sizeof(pgm) - sizeof(pgm.chunkMagic) - sizeof(pgm.byteSize) - sizeof(pgm.content.data.chunk);
+  pgm.fxMagic    = chunkPresetMagic;
+  pgm.version    = 1;
+  pgm.fxID       = effect_->uniqueID;
+  pgm.fxVersion  = effect_->version;
+  pgm.numParams  = effect_->numParams;
+  
+  // get the name
+  effect_->dispatcher(effect_, effGetProgramName, 0, 0, pgm.prgName, 0);
+
+  // create a file
   std::ofstream program(path, std::ios::binary);
+
+  // write it all out
+  PutBE32(program, pgm.chunkMagic);
+  PutBE32(program, pgm.byteSize);
+  PutBE32(program, pgm.fxMagic);
+  PutBE32(program, pgm.version);
+  PutBE32(program, pgm.fxID);
+  PutBE32(program, pgm.fxVersion);
+  PutBE32(program, pgm.numParams);
+  program.write(pgm.prgName, sizeof(pgm.prgName));
+  PutBE32(program, byte_size);
   program.write(reinterpret_cast<char*>(chunk), byte_size);
+
   program.close();
 }
 

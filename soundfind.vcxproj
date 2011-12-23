@@ -86,6 +86,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="asio_helper.h" />
+    <ClInclude Include="endian.h" />
     <ClInclude Include="sound.h" />
     <ClInclude Include="vstsdk2.4\pluginterfaces\vst2.x\aeffectx.h" />
     <ClInclude Include="vst_helper.h" />
