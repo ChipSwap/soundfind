@@ -27,15 +27,17 @@ static std::tr1::uniform_real<float> unif_(0, 1); // a random number distributio
 
 static const char* best_name_ = "best.fxp";
 
+static const int kIters = 3;
+
 // put our good stuff here -- write out what we want when ASIO requests it
 static void MyAudioCallback(int index)
 {
-  EnterCriticalSection(&snd_crit_);
-
   const std::vector< std::vector<float> >& s = best_match_;
 
   // do we have any data?
   if (s.size() <= 0) return;
+
+  EnterCriticalSection(&snd_crit_);
 
   // go through the buffers, only using outputs
   ASIOBufferInfo*  b = asio_.buffer_infos_  + asio_.input_channels_;
@@ -67,12 +69,12 @@ static void MyAudioCallback(int index)
     }
   }
 
-  LeaveCriticalSection(&snd_crit_);
-
   // adjust the location within the sound for next output
   // assume that each channel contains the same amount of info
   buf_idx_ += asio_.buffer_size_;
   buf_idx_ %= s[0].size();
+
+  LeaveCriticalSection(&snd_crit_);
 }
 
 template <class T>
@@ -86,155 +88,86 @@ float CalculateSonicDifference(Sound<T> snd, float* cmp[2])
   return diff;
 }
 
-//VstSpeakerArrangement spk_arr = { 0 };
-//spk_arr.type        = kSpeakerArrStereo;
-//spk_arr.numChannels = 2;
-//VstSpeakerArrangement* spk_arr_out = (VstSpeakerArrangement*)eff->dispatcher(eff, effSetSpeakerArrangement, 0, 0, &spk_arr, 0);
-
-typedef AEffect* (*Plug)(audioMasterCallback audioMaster);
-static VstTimeInfo time_info_ = { 0 };
-
-VstIntPtr VSTCALLBACK MyHostCallback(AEffect* effect, VstInt32 opcode, VstInt32 index, VstIntPtr value, void* ptr, float opt) 
-{ 
-  switch (opcode)
-  {
-  case audioMasterVersion:
-    return kVstVersion;
-  case audioMasterGetTime:
-    
-    // set basic data
-    // everything else is 0
-    time_info_.sampleRate         = 44100;
-    time_info_.tempo              = 120;
-    time_info_.timeSigNumerator   = 4;
-    time_info_.timeSigDenominator = 4;
-
-    time_info_.flags |= kVstTransportChanged;
-    time_info_.flags |= kVstTransportPlaying;
-    time_info_.flags |= kVstNanosValid;
-    time_info_.flags |= kVstPpqPosValid;
-    time_info_.flags |= kVstTempoValid;
-    time_info_.flags |= kVstBarsValid;
-    time_info_.flags |= kVstCyclePosValid;
-    time_info_.flags |= kVstTimeSigValid;
-    time_info_.flags |= kVstSmpteValid;
-    time_info_.flags |= kVstClockValid;
-
-    return (VstIntPtr)&time_info_;
-  }
-
-  return NULL;
-}
-
 int main(int argc, char* argv[])
 {
-  float sample_rate = 44100;
-  int block_size    = 512;
-    
-  //HMODULE  module = LoadLibrary("Synth1 VST.dll");
-  HMODULE  module = LoadLibrary("Rez v3.0 - Yellow.dll");
-  Plug     addr   = (Plug)GetProcAddress(module, "main");
-  AEffect* eff    = addr(MyHostCallback);
+  if (argc < 2)
+    exit(EXIT_FAILURE);
 
-  float* output[2];
-  output[0] = new float[block_size];
-  output[1] = new float[block_size];
+  // make a critical section for sound playing
+  InitializeCriticalSection(&snd_crit_);
 
-  eff->dispatcher(eff, effOpen, 0, 0, 0, 0);
+  // need a synth to load
+  std::string vst_path = argv[1];
+  
+  // load it
+  vst_.Init(vst_path);
 
+  // read a wav file
+  snd_.ReadWav("bwip_norm.wav");
+
+  // gets ASIO going and uses our callback as the audio callback
+  // use the callback to play it
+  asio_.Init(MyAudioCallback);
+
+  // get our sound length
+  unsigned int snd_len = snd_.data_[0].size();
+
+  // get some output
+  std::vector< std::vector<float> > generated = std::vector< std::vector<float> >(2, std::vector<float>(snd_len, 0));
+  
+  // get pointers to generate the output
+  float* buffer[2];
+  buffer[0] = &(*generated[0].begin());
+  buffer[1] = &(*generated[1].begin());
+
+  //// listen to the base
+  //vst_.GenerateOutput(snd_len, buffer);
+  //best_match_ = generated;
+  //for (;;) {}
+
+  // load the best so far
+  vst_.LoadProgram(best_name_);
+
+  // for all eternity...
   for (;;)
   {
-    eff->dispatcher(eff, effSetSampleRate, 0, 0, 0, sample_rate);
-    eff->dispatcher(eff, effSetBlockSize, 0, block_size, 0, 0);
-    eff->dispatcher(eff, effMainsChanged, 0, 1, 0, 0);
+    // try it a few times and take the average diff
+    float diff = 0;
+    // make a sound given the current values
+    for (int i = 0; i < kIters; ++i)
+    {
+      vst_.GenerateOutput(snd_.sample_rate_, snd_len, buffer);
+      diff += CalculateSonicDifference(snd_, buffer);
+    }
+    diff /= kIters;
     
-    memset(output[0], 0, sizeof(float) * block_size);
-    memset(output[1], 0, sizeof(float) * block_size);
-    eff->processReplacing(eff, NULL, output, block_size);
+    // we found a better one!
+    // copy into best match
+    if (diff < best_diff_)
+    {
+      EnterCriticalSection(&snd_crit_);
+      best_match_ = generated;
+      LeaveCriticalSection(&snd_crit_);
+      best_diff_  = diff;
 
-    eff->dispatcher(eff, effMainsChanged, 0, 0, 0, 0);
+      // output our best
+      std::cout << best_diff_ << std::endl;
+
+      // save it
+      vst_.SaveCurrentProgram(best_name_);
+    }
+
+    // set all parameters randomly!
+    for (int i = 0; i < vst_.GetNumParams(); ++i)
+      vst_.SetParam(i, unif_(eng_));
   }
 
-  eff->dispatcher(eff, effClose, 0, 0, 0, 0);
-
-  delete[] output[0];
-  delete[] output[1];
-
-  //if (argc < 2)
-  //  exit(EXIT_FAILURE);
-
-  //// make a critical section for sound playing
-  //InitializeCriticalSection(&snd_crit_);
-
-  //// need a synth to load
-  //std::string vst_path = argv[1];
-
-  //// read a wav file
-  //snd_.ReadWav("bwip.wav");
-
-  //// gets ASIO going and uses our callback as the audio callback
-  //// use the callback to play it
-  //asio_.Init(MyAudioCallback);
-
-  //// get our sound length
-  //unsigned int snd_len = snd_.data_[0].size();
-
-  //// get some output
-  //std::vector< std::vector<float> > generated = std::vector< std::vector<float> >(2, std::vector<float>(snd_len, 0));
-  //
-  //// get pointers to generate the output
-  //float* output[2];
-  //output[0] = &(*generated[0].begin());
-  //output[1] = &(*generated[1].begin());
-
-  ////// listen to the base
-  ////vst_.GenerateOutput(snd_len, output);
-  ////best_match_ = generated;
-  ////for (;;) {}
-
-  //// load the best so far
-  ////vst_.LoadProgram(best_name_);
-
-  //vst_.Open(vst_path.c_str());
-
-  //// for all eternity...
-  //for (;;)
-  //{
-  //  // make a sound given the current values
-  //  vst_.GenerateOutput(vst_path.c_str(), snd_.sample_rate_, snd_len, output);
-  //  vst_.GenerateOutput(vst_path.c_str(), snd_.sample_rate_, snd_len, output);
-
-  //  // check the difference
-  //  float diff = CalculateSonicDifference(snd_, output);
-  //  
-  //  // we found a better one!
-  //  // copy into best match
-  //  if (diff < best_diff_)
-  //  {
-  //    EnterCriticalSection(&snd_crit_);
-  //    best_match_ = generated;
-  //    LeaveCriticalSection(&snd_crit_);
-  //    best_diff_  = diff;
-
-  //    // output our best
-  //    std::cout << best_diff_ << std::endl;
-
-  //    // save it
-  //    vst_.SaveCurrentProgram(best_name_);
-  //  }
-
-  //  // set all parameters randomly!
-  //  for (int i = 0; i < vst_.GetNumParams(); ++i)
-  //    vst_.SetParam(i, unif_(eng_));
-  //}
-
-  ///*
   //float val_b = vst_.GetParam(0);
   //vst_.SetParam(0, 0.123456f);
   //float val_a = vst_.GetParam(0);
 
   //vst_.LoadProgram("pgm.fxp");
-  //val_a = vst_.GetParam(0);*/
+  //val_a = vst_.GetParam(0);
 
-  //DeleteCriticalSection(&snd_crit_);
+  DeleteCriticalSection(&snd_crit_);
 }

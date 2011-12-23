@@ -16,7 +16,7 @@ class VSTHelper
 {
 public:
 
-  void GenerateOutput(const std::string& vst_path, float sample_rate, VstInt32 block_size, float* output[2]);
+  void GenerateOutput(float sample_rate, VstInt32 block_size, float* output[2]);
   
   void LoadProgram(const std::string& path);
   void SaveCurrentProgram(const std::string& path);
@@ -27,8 +27,8 @@ public:
   void  SetParam(unsigned int index, float value);
   float GetParam(unsigned int index);
 
-  void Open(const std::string& vst_path);
-  void Close();
+  void Init(const std::string& vst_path);
+  void Deinit();
 
 private:
 

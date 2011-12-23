@@ -81,6 +81,7 @@
     <ClCompile Include="ASIOSDK2\common\asio.cpp" />
     <ClCompile Include="ASIOSDK2\host\asiodrivers.cpp" />
     <ClCompile Include="ASIOSDK2\host\pc\asiolist.cpp" />
+    <ClCompile Include="quick_test.cpp" />
     <ClCompile Include="vst_helper.cpp" />
   </ItemGroup>
   <ItemGroup>
