@@ -78,14 +78,22 @@ static void MyAudioCallback(int index)
 }
 
 template <class T>
-float CalculateSonicDifference(Sound<T> snd, float* cmp[2])
+float CalculateSonicDifference(VSTHelper vst, Sound<T> snd, float* cmp[2])
 {
-  // SSD
-  float diff = 0.f;
-  for (unsigned int i = 0; i < std::min(snd.data_.size(), static_cast<unsigned int>(2)); ++i)
-    for (unsigned int j = 0; j < snd.data_[i].size(); ++j)
-      diff += (cmp[i][j] - snd.data_[i][j]) * (cmp[i][j] - snd.data_[i][j]);
-  return diff;
+  float diff = 0;
+  
+  for (int i = 0; i < kIters; ++i)
+  {
+    // make a sound given the current values
+    vst_.GenerateOutput(snd_.sample_rate_, snd_.data_[0].size(), cmp);
+    
+    // SSD
+    for (unsigned int i = 0; i < std::min(snd.data_.size(), static_cast<unsigned int>(2)); ++i)
+      for (unsigned int j = 0; j < snd.data_[i].size(); ++j)
+        diff += (cmp[i][j] - snd.data_[i][j]) * (cmp[i][j] - snd.data_[i][j]);
+  }
+
+  return diff / kIters;
 }
 
 int main(int argc, char* argv[])
@@ -131,15 +139,8 @@ int main(int argc, char* argv[])
   // for all eternity...
   for (;;)
   {
-    // try it a few times and take the average diff
-    float diff = 0;
-    // make a sound given the current values
-    for (int i = 0; i < kIters; ++i)
-    {
-      vst_.GenerateOutput(snd_.sample_rate_, snd_len, buffer);
-      diff += CalculateSonicDifference(snd_, buffer);
-    }
-    diff /= kIters;
+    // try it a few times and take the average diff for the final
+    float diff = CalculateSonicDifference(vst_, snd_, buffer);
     
     // we found a better one!
     // copy into best match
